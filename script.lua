@@ -1,495 +1,201 @@
--- DIX MOBILE FLIGHT + PUSH v3.0 (Fully Touch-Compatible)
--- Свёртываемое меню в квадрат, все функции работают на телефоне
+-- Создаем ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MobileActiveMenuGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
 
-local player = game.Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local rootPart = character:WaitForChild("HumanoidRootPart")
-local userInput = game:GetService("UserInputService")
-local runService = game:GetService("RunService")
+local Player = game.Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
--- НАСТРОЙКИ
-local flySpeed = 70
-local pushForce = 5000
-local pushRadius = 8
-local pushInterval = 0.15
+Player.CharacterAdded:Connect(function(char)
+    Character = char
+    HumanoidRootPart = char:WaitForChild("HumanoidRootPart")
+end)
 
--- СОСТОЯНИЯ
-local flying = false
-local pushEnabled = false
-local bodyVelocity = nil
-local bodyGyro = nil
-local menuOpen = true  -- GUI открыт
+-- Переменные состояний
+local isMinimized = false
+local flyActive = false
+local pushActive = false
 
--- СОЗДАНИЕ ГЛАВНОГО GUI
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "DIX_MOBILE"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = player:WaitForChild("PlayerGui")
+-- Главный фрейм
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 260, 0, 200)
+MainFrame.Position = UDim2.new(0.5, -130, 0.3, -100)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true -- Перетаскивание пальцем
+MainFrame.Parent = ScreenGui
 
--- === ОСНОВНОЕ ОКНО МЕНЮ ===
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 180, 0, 130)
-mainFrame.Position = UDim2.new(0, 20, 0, 100)
-mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-mainFrame.BackgroundTransparency = 0.15
-mainFrame.BorderSizePixel = 0
-mainFrame.Active = true
-mainFrame.Draggable = true
-mainFrame.Parent = screenGui
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = MainFrame
 
--- Заголовок (с кнопкой свернуть)
-local titleBar = Instance.new("Frame")
-titleBar.Size = UDim2.new(1, 0, 0, 30)
-titleBar.BackgroundTransparency = 1
-titleBar.Parent = mainFrame
+-- Заголовок
+local Title = Instance.new("TextLabel")
+Title.Name = "Title"
+Title.Size = UDim2.new(1, -40, 0, 35)
+Title.Position = UDim2.new(0, 10, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "DIX MENU"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 18
+Title.Font = Enum.Font.SourceSansBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = MainFrame
 
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(0.7, 0, 1, 0)
-titleLabel.Position = UDim2.new(0, 5, 0, 0)
-titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "DIX"
-titleLabel.TextColor3 = Color3.fromRGB(255, 80, 120)
-titleLabel.TextScaled = true
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-titleLabel.Parent = titleBar
+-- Контейнер для кнопок
+local Container = Instance.new("Frame")
+Container.Name = "Container"
+Container.Size = UDim2.new(1, -20, 1, -45)
+Container.Position = UDim2.new(0, 10, 0, 35)
+Container.BackgroundTransparency = 1
+Container.Parent = MainFrame
 
--- Кнопка свернуть (квадратик)
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size = UDim2.new(0, 30, 1, -4)
-toggleBtn.Position = UDim2.new(1, -35, 0, 2)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-toggleBtn.Text = "−"
-toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleBtn.TextScaled = true
-toggleBtn.Font = Enum.Font.GothamBold
-toggleBtn.Parent = titleBar
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Padding = UDim.new(0, 8)
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Parent = Container
 
--- Кнопка FLY
-local flyBtn = Instance.new("TextButton")
-flyBtn.Size = UDim2.new(0, 150, 0, 40)
-flyBtn.Position = UDim2.new(0.5, -75, 0, 40)
-flyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-flyBtn.Text = "🛫 FLY: OFF"
-flyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-flyBtn.TextScaled = true
-flyBtn.Font = Enum.Font.GothamBold
-flyBtn.Parent = mainFrame
-
--- Кнопка PUSH
-local pushBtn = Instance.new("TextButton")
-pushBtn.Size = UDim2.new(0, 150, 0, 40)
-pushBtn.Position = UDim2.new(0.5, -75, 0, 85)
-pushBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-pushBtn.Text = "💥 PUSH: OFF"
-pushBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-pushBtn.TextScaled = true
-pushBtn.Font = Enum.Font.GothamBold
-pushBtn.Parent = mainFrame
-
--- === КВАДРАТ (СВЁРНУТОЕ СОСТОЯНИЕ) ===
-local miniFrame = Instance.new("Frame")
-miniFrame.Size = UDim2.new(0, 50, 0, 50)
-miniFrame.Position = UDim2.new(0, 20, 0, 100)
-miniFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-miniFrame.BackgroundTransparency = 0.15
-miniFrame.BorderSizePixel = 0
-miniFrame.Active = true
-miniFrame.Draggable = true
-miniFrame.Visible = false
-miniFrame.Parent = screenGui
-
-local miniLabel = Instance.new("TextLabel")
-miniLabel.Size = UDim2.new(1, 0, 1, 0)
-miniLabel.BackgroundTransparency = 1
-miniLabel.Text = "DIX"
-miniLabel.TextColor3 = Color3.fromRGB(255, 80, 120)
-miniLabel.TextScaled = true
-miniLabel.Font = Enum.Font.GothamBold
-miniLabel.Parent = miniFrame
-
-local miniToggleBtn = Instance.new("TextButton")
-miniToggleBtn.Size = UDim2.new(1, 0, 1, 0)
-miniToggleBtn.BackgroundTransparency = 1
-miniToggleBtn.Text = ""
-miniToggleBtn.Parent = miniFrame
-
--- === ЛОГИКА СВЁРТЫВАНИЯ ===
-local function toggleMenu()
-    menuOpen = not menuOpen
-    mainFrame.Visible = menuOpen
-    miniFrame.Visible = not menuOpen
-    toggleBtn.Text = menuOpen and "−" or "+"
+-- Стили для кнопок функций
+local function styleButton(btn, text)
+    btn.Size = UDim2.new(1, 0, 0, 40)
+    btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 16
+    btn.Font = Enum.Font.SourceSansBold
+    btn.BorderSizePixel = 0
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
 end
 
-toggleBtn.MouseButton1Click:Connect(toggleMenu)
-miniToggleBtn.MouseButton1Click:Connect(toggleMenu)
+-- ==========================================
+-- ЛОГИКА ФУНКЦИИ: ПОЛЕТ (FLY)
+-- ==========================================
+local FlyBtn = Instance.new("TextButton")
+styleButton(FlyBtn, "Полет: ВЫКЛ")
+FlyBtn.Parent = Container
 
--- === ЛОГИКА ПОЛЁТА (С ПОДДЕРЖКОЙ ТАЧА) ===
-local flyConnection
-local function startFly()
-    if flyConnection then flyConnection:Disconnect() end
-    
-    bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-    bodyVelocity.Parent = rootPart
-
-    bodyGyro = Instance.new("BodyGyro")
-    bodyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
-    bodyGyro.CFrame = rootPart.CFrame
-    bodyGyro.Parent = rootPart
-
-    flyConnection = runService.RenderStepped:Connect(function()
-        if not flying then return end
-        local moveDirection = Vector3.new()
-        
-        -- Управление с телефона: используем виртуальный джойстик (если есть) или клавиши
-        -- Для простоты используем стандартные WASD + пробел/шифт (на телефоне будут работать через внешнюю клавиатуру или эмуляцию)
-        -- Но для нативного тача добавим управление через касания (ниже)
-        
-        if userInput:IsKeyDown(Enum.KeyCode.W) then moveDirection = moveDirection + rootPart.CFrame.LookVector end
-        if userInput:IsKeyDown(Enum.KeyCode.S) then moveDirection = moveDirection - rootPart.CFrame.LookVector end
-        if userInput:IsKeyDown(Enum.KeyCode.A) then moveDirection = moveDirection - rootPart.CFrame.RightVector end
-        if userInput:IsKeyDown(Enum.KeyCode.D) then moveDirection = moveDirection + rootPart.CFrame.RightVector end
-        if userInput:IsKeyDown(Enum.KeyCode.Space) then moveDirection = moveDirection + Vector3.new(0, 1, 0) end
-        if userInput:IsKeyDown(Enum.KeyCode.LeftShift) then moveDirection = moveDirection - Vector3.new(0, 1, 0) end
-        
-        -- Дополнительно: управление через тач-джойстик (если есть на экране)
-        -- Здесь можно интегрировать с мобильным джойстиком, но для простоты оставляем клавиши
-        
-        if moveDirection.Magnitude > 0 then
-            bodyVelocity.Velocity = moveDirection.Unit * flySpeed
+local bodyVelocity, bodyGyro
+task.spawn(function()
+    while task.wait() do
+        if flyActive and Character and HumanoidRootPart and Character:FindFirstChild("Humanoid") then
+            if not bodyVelocity then
+                bodyVelocity = Instance.new("BodyVelocity")
+                bodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+                bodyVelocity.Parent = HumanoidRootPart
+                
+                bodyGyro = Instance.new("BodyGyro")
+                bodyGyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+                bodyGyro.CFrame = HumanoidRootPart.CFrame
+                bodyGyro.Parent = HumanoidRootPart
+            end
+            -- На мобильном персонаж летит туда, куда направлена камера (взгляд)
+            local camera = workspace.CurrentCamera
+            bodyVelocity.Velocity = camera.CFrame.LookVector * 50 -- 50 — скорость полета
+            bodyGyro.CFrame = camera.CFrame
         else
-            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
+            if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
         end
-        bodyGyro.CFrame = rootPart.CFrame
-    end)
-end
-
-local function stopFly()
-    if flyConnection then flyConnection:Disconnect(); flyConnection = nil end
-    if bodyVelocity then bodyVelocity:Destroy(); bodyVelocity = nil end
-    if bodyGyro then bodyGyro:Destroy(); bodyGyro = nil end
-end
-
-local function toggleFly()
-    flying = not flying
-    flyBtn.Text = flying and "🛫 FLY: ON" or "🛫 FLY: OFF"
-    flyBtn.BackgroundColor3 = flying and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(60, 60, 70)
-    if flying then
-        startFly()
-    else
-        stopFly()
     end
-end
+end)
 
-flyBtn.MouseButton1Click:Connect(toggleFly)
+FlyBtn.MouseButton1Click:Connect(function()
+    flyActive = not flyActive
+    if flyActive then
+        FlyBtn.Text = "Полет: ВКЛ"
+        FlyBtn.BackgroundColor3 = Color3.fromRGB(46, 139, 87) -- Зеленый
+    else
+        FlyBtn.Text = "Полет: ВЫКЛ"
+        FlyBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)  -- Обычный
+    end
+end)
 
--- === ЛОГИКА ОТБРАСЫВАНИЯ ===
-local pushLoopRunning = false
-local function pushPlayers()
-    if not pushEnabled then return end
-    for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
-        if otherPlayer ~= player then
-            local otherChar = otherPlayer.Character
-            if otherChar and otherChar:FindFirstChild("HumanoidRootPart") then
-                local dist = (rootPart.Position - otherChar.HumanoidRootPart.Position).Magnitude
-                if dist < pushRadius then
-                    local direction = (otherChar.HumanoidRootPart.Position - rootPart.Position).Unit
-                    local force = direction * pushForce
-                    local bodyVel = Instance.new("BodyVelocity")
-                    bodyVel.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-                    bodyVel.Velocity = force
-                    bodyVel.Parent = otherChar.HumanoidRootPart
-                    game:GetService("Debris"):AddItem(bodyVel, 0.1)
+-- ==========================================
+-- ЛОГИКА ФУНКЦИИ: ОТБРАСЫВАТЬ ЛЮДЕЙ (PUSH)
+-- ==========================================
+local PushBtn = Instance.new("TextButton")
+styleButton(PushBtn, "Отбрасывание: ВЫКЛ")
+PushBtn.Parent = Container
+
+task.spawn(function()
+    while task.wait(0.1) do -- Проверка каждые 0.1 сек для экономии заряда батареи
+        if pushActive and HumanoidRootPart then
+            for _, p in pairs(game.Players:GetPlayers()) do
+                if p ~= Player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local targetHRP = p.Character.HumanoidRootPart
+                    -- Вычисляем дистанцию до другого игрока
+                    local distance = (HumanoidRootPart.Position - targetHRP.Position).Magnitude
+                    if distance < 12 then -- Расстояние срабатывания (12 шпилек/студов)
+                        -- Направление импульса от нас к цели
+                        local direction = (targetHRP.Position - HumanoidRootPart.Position).Unit
+                        
+                        -- Создаем мощный толчок
+                        local velocity = Instance.new("BodyVelocity")
+                        velocity.MaxForce = Vector3.new(5e5, 5e5, 5e5)
+                        velocity.Velocity = (direction * 80) + Vector3.new(0, 35, 0) -- 80 сила вдаль, 35 вверх
+                        velocity.Parent = targetHRP
+                        
+                        task.wait(0.1)
+                        velocity:Destroy()
+                    end
                 end
             end
         end
     end
-end
-
-local function togglePush()
-    pushEnabled = not pushEnabled
-    pushBtn.Text = pushEnabled and "💥 PUSH: ON" or "💥 PUSH: OFF"
-    pushBtn.BackgroundColor3 = pushEnabled and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(60, 60, 70)
-    
-    if pushEnabled and not pushLoopRunning then
-        pushLoopRunning = true
-        spawn(function()
-            while pushEnabled do
-                pushPlayers()
-                wait(pushInterval)
-            end
-            pushLoopRunning = false
-        end)
-    end
-end
-
-pushBtn.MouseButton1Click:Connect(togglePush)
-
--- === ОБНОВЛЕНИЕ ПРИ РЕСПАВНЕ ===
-player.CharacterAdded:Connect(function(newChar)
-    character = newChar
-    rootPart = character:WaitForChild("HumanoidRootPart")
-    if flying then
-        stopFly()
-        flying = false
-        flyBtn.Text = "🛫 FLY: OFF"
-        flyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-        toggleFly() -- перезапускаем
-    end
 end)
 
--- === ДОПОЛНИТЕЛЬНО: УПРАВЛЕНИЕ ТАЧОМ ДЛЯ ПОЛЁТА (необязательно) ===
--- Можно добавить виртуальный джойстик, но для простоты оставляем клавиши.
--- На телефоне можно использовать внешнюю клавиатуру или эмулятор.
-
-print("[DIX]: Мобильная версия загружена. Нажмите '−' для сворачивания в квадрат.") -- DIX MOBILE FLIGHT + PUSH v3.0 (Fully Touch-Compatible)
--- Свёртываемое меню в квадрат, все функции работают на телефоне
-
-local player = game.Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local rootPart = character:WaitForChild("HumanoidRootPart")
-local userInput = game:GetService("UserInputService")
-local runService = game:GetService("RunService")
-
--- НАСТРОЙКИ
-local flySpeed = 70
-local pushForce = 5000
-local pushRadius = 8
-local pushInterval = 0.15
-
--- СОСТОЯНИЯ
-local flying = false
-local pushEnabled = false
-local bodyVelocity = nil
-local bodyGyro = nil
-local menuOpen = true  -- GUI открыт
-
--- СОЗДАНИЕ ГЛАВНОГО GUI
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "DIX_MOBILE"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = player:WaitForChild("PlayerGui")
-
--- === ОСНОВНОЕ ОКНО МЕНЮ ===
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 180, 0, 130)
-mainFrame.Position = UDim2.new(0, 20, 0, 100)
-mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-mainFrame.BackgroundTransparency = 0.15
-mainFrame.BorderSizePixel = 0
-mainFrame.Active = true
-mainFrame.Draggable = true
-mainFrame.Parent = screenGui
-
--- Заголовок (с кнопкой свернуть)
-local titleBar = Instance.new("Frame")
-titleBar.Size = UDim2.new(1, 0, 0, 30)
-titleBar.BackgroundTransparency = 1
-titleBar.Parent = mainFrame
-
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(0.7, 0, 1, 0)
-titleLabel.Position = UDim2.new(0, 5, 0, 0)
-titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "DIX"
-titleLabel.TextColor3 = Color3.fromRGB(255, 80, 120)
-titleLabel.TextScaled = true
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-titleLabel.Parent = titleBar
-
--- Кнопка свернуть (квадратик)
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size = UDim2.new(0, 30, 1, -4)
-toggleBtn.Position = UDim2.new(1, -35, 0, 2)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-toggleBtn.Text = "−"
-toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleBtn.TextScaled = true
-toggleBtn.Font = Enum.Font.GothamBold
-toggleBtn.Parent = titleBar
-
--- Кнопка FLY
-local flyBtn = Instance.new("TextButton")
-flyBtn.Size = UDim2.new(0, 150, 0, 40)
-flyBtn.Position = UDim2.new(0.5, -75, 0, 40)
-flyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-flyBtn.Text = "🛫 FLY: OFF"
-flyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-flyBtn.TextScaled = true
-flyBtn.Font = Enum.Font.GothamBold
-flyBtn.Parent = mainFrame
-
--- Кнопка PUSH
-local pushBtn = Instance.new("TextButton")
-pushBtn.Size = UDim2.new(0, 150, 0, 40)
-pushBtn.Position = UDim2.new(0.5, -75, 0, 85)
-pushBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-pushBtn.Text = "💥 PUSH: OFF"
-pushBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-pushBtn.TextScaled = true
-pushBtn.Font = Enum.Font.GothamBold
-pushBtn.Parent = mainFrame
-
--- === КВАДРАТ (СВЁРНУТОЕ СОСТОЯНИЕ) ===
-local miniFrame = Instance.new("Frame")
-miniFrame.Size = UDim2.new(0, 50, 0, 50)
-miniFrame.Position = UDim2.new(0, 20, 0, 100)
-miniFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-miniFrame.BackgroundTransparency = 0.15
-miniFrame.BorderSizePixel = 0
-miniFrame.Active = true
-miniFrame.Draggable = true
-miniFrame.Visible = false
-miniFrame.Parent = screenGui
-
-local miniLabel = Instance.new("TextLabel")
-miniLabel.Size = UDim2.new(1, 0, 1, 0)
-miniLabel.BackgroundTransparency = 1
-miniLabel.Text = "DIX"
-miniLabel.TextColor3 = Color3.fromRGB(255, 80, 120)
-miniLabel.TextScaled = true
-miniLabel.Font = Enum.Font.GothamBold
-miniLabel.Parent = miniFrame
-
-local miniToggleBtn = Instance.new("TextButton")
-miniToggleBtn.Size = UDim2.new(1, 0, 1, 0)
-miniToggleBtn.BackgroundTransparency = 1
-miniToggleBtn.Text = ""
-miniToggleBtn.Parent = miniFrame
-
--- === ЛОГИКА СВЁРТЫВАНИЯ ===
-local function toggleMenu()
-    menuOpen = not menuOpen
-    mainFrame.Visible = menuOpen
-    miniFrame.Visible = not menuOpen
-    toggleBtn.Text = menuOpen and "−" or "+"
-end
-
-toggleBtn.MouseButton1Click:Connect(toggleMenu)
-miniToggleBtn.MouseButton1Click:Connect(toggleMenu)
-
--- === ЛОГИКА ПОЛЁТА (С ПОДДЕРЖКОЙ ТАЧА) ===
-local flyConnection
-local function startFly()
-    if flyConnection then flyConnection:Disconnect() end
-    
-    bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-    bodyVelocity.Parent = rootPart
-
-    bodyGyro = Instance.new("BodyGyro")
-    bodyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
-    bodyGyro.CFrame = rootPart.CFrame
-    bodyGyro.Parent = rootPart
-
-    flyConnection = runService.RenderStepped:Connect(function()
-        if not flying then return end
-        local moveDirection = Vector3.new()
-        
-        -- Управление с телефона: используем виртуальный джойстик (если есть) или клавиши
-        -- Для простоты используем стандартные WASD + пробел/шифт (на телефоне будут работать через внешнюю клавиатуру или эмуляцию)
-        -- Но для нативного тача добавим управление через касания (ниже)
-        
-        if userInput:IsKeyDown(Enum.KeyCode.W) then moveDirection = moveDirection + rootPart.CFrame.LookVector end
-        if userInput:IsKeyDown(Enum.KeyCode.S) then moveDirection = moveDirection - rootPart.CFrame.LookVector end
-        if userInput:IsKeyDown(Enum.KeyCode.A) then moveDirection = moveDirection - rootPart.CFrame.RightVector end
-        if userInput:IsKeyDown(Enum.KeyCode.D) then moveDirection = moveDirection + rootPart.CFrame.RightVector end
-        if userInput:IsKeyDown(Enum.KeyCode.Space) then moveDirection = moveDirection + Vector3.new(0, 1, 0) end
-        if userInput:IsKeyDown(Enum.KeyCode.LeftShift) then moveDirection = moveDirection - Vector3.new(0, 1, 0) end
-        
-        -- Дополнительно: управление через тач-джойстик (если есть на экране)
-        -- Здесь можно интегрировать с мобильным джойстиком, но для простоты оставляем клавиши
-        
-        if moveDirection.Magnitude > 0 then
-            bodyVelocity.Velocity = moveDirection.Unit * flySpeed
-        else
-            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-        end
-        bodyGyro.CFrame = rootPart.CFrame
-    end)
-end
-
-local function stopFly()
-    if flyConnection then flyConnection:Disconnect(); flyConnection = nil end
-    if bodyVelocity then bodyVelocity:Destroy(); bodyVelocity = nil end
-    if bodyGyro then bodyGyro:Destroy(); bodyGyro = nil end
-end
-
-local function toggleFly()
-    flying = not flying
-    flyBtn.Text = flying and "🛫 FLY: ON" or "🛫 FLY: OFF"
-    flyBtn.BackgroundColor3 = flying and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(60, 60, 70)
-    if flying then
-        startFly()
+PushBtn.MouseButton1Click:Connect(function()
+    pushActive = not pushActive
+    if pushActive then
+        PushBtn.Text = "Отбрасывание: ВКЛ"
+        PushBtn.BackgroundColor3 = Color3.fromRGB(46, 139, 87)
     else
-        stopFly()
-    end
-end
-
-flyBtn.MouseButton1Click:Connect(toggleFly)
-
--- === ЛОГИКА ОТБРАСЫВАНИЯ ===
-local pushLoopRunning = false
-local function pushPlayers()
-    if not pushEnabled then return end
-    for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
-        if otherPlayer ~= player then
-            local otherChar = otherPlayer.Character
-            if otherChar and otherChar:FindFirstChild("HumanoidRootPart") then
-                local dist = (rootPart.Position - otherChar.HumanoidRootPart.Position).Magnitude
-                if dist < pushRadius then
-                    local direction = (otherChar.HumanoidRootPart.Position - rootPart.Position).Unit
-                    local force = direction * pushForce
-                    local bodyVel = Instance.new("BodyVelocity")
-                    bodyVel.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-                    bodyVel.Velocity = force
-                    bodyVel.Parent = otherChar.HumanoidRootPart
-                    game:GetService("Debris"):AddItem(bodyVel, 0.1)
-                end
-            end
-        end
-    end
-end
-
-local function togglePush()
-    pushEnabled = not pushEnabled
-    pushBtn.Text = pushEnabled and "💥 PUSH: ON" or "💥 PUSH: OFF"
-    pushBtn.BackgroundColor3 = pushEnabled and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(60, 60, 70)
-    
-    if pushEnabled and not pushLoopRunning then
-        pushLoopRunning = true
-        spawn(function()
-            while pushEnabled do
-                pushPlayers()
-                wait(pushInterval)
-            end
-            pushLoopRunning = false
-        end)
-    end
-end
-
-pushBtn.MouseButton1Click:Connect(togglePush)
-
--- === ОБНОВЛЕНИЕ ПРИ РЕСПАВНЕ ===
-player.CharacterAdded:Connect(function(newChar)
-    character = newChar
-    rootPart = character:WaitForChild("HumanoidRootPart")
-    if flying then
-        stopFly()
-        flying = false
-        flyBtn.Text = "🛫 FLY: OFF"
-        flyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-        toggleFly() -- перезапускаем
+        PushBtn.Text = "Отбрасывание: ВЫКЛ"
+        PushBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
     end
 end)
 
--- === ДОПОЛНИТЕЛЬНО: УПРАВЛЕНИЕ ТАЧОМ ДЛЯ ПОЛЁТА (необязательно) ===
--- Можно добавить виртуальный джойстик, но для простоты оставляем клавиши.
--- На телефоне можно использовать внешнюю клавиатуру или эмулятор.
+-- ==========================================
+-- КНОПКА СВЕРНУТЬ / РАЗВЕРНУТЬ (ТРИГГЕР)
+-- ==========================================
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Name = "ToggleBtn"
+ToggleBtn.Size = UDim2.new(0, 30, 0, 30)
+ToggleBtn.Position = UDim2.new(1, -35, 0, 5)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+ToggleBtn.Text = "−"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.TextSize = 20
+ToggleBtn.Font = Enum.Font.SourceSansBold
+ToggleBtn.BorderSizePixel = 0
+ToggleBtn.Parent = MainFrame
 
-print("[DIX]: Мобильная версия загружена. Нажмите '−' для сворачивания в квадрат.")
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 6)
+ToggleCorner.Parent = ToggleBtn
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    if not isMinimized then
+        isMinimized = true
+        Title.Visible = false
+        Container.Visible = false
+        MainFrame.Size = UDim2.new(0, 40, 0, 40)
+        ToggleBtn.Position = UDim2.new(0, 5, 0, 5)
+        ToggleBtn.Text = "+"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+    else
+        isMinimized = false
+        MainFrame.Size = UDim2.new(0, 260, 0, 200)
+        ToggleBtn.Position = UDim2.new(1, -35, 0, 5)
+        ToggleBtn.Text = "−"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        Title.Visible = true
+        Container.Visible = true
+    end
+end)
